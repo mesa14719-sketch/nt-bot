@@ -1,0 +1,6 @@
+python-telegram-bot>=21.0
+psutil>=5.9.0
+requests
+python-telegram-bot
+urllib3
+python-telegram-bot[job-queue]==22.7
