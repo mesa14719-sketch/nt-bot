@@ -51,7 +51,7 @@ requests.packages.urllib3.disable_warnings(category=InsecureRequestWarning)
 # CONFIG — غيّر هنا
 # ============================================================
 BOT_TOKEN = "9021933468:AAEHgQARV9BXglnxYnk1_o_kmxtTvQebD74"       # ← @BotFather
-OWNER_ID = 8743212779                        # ← تأكد
+OWNER_ID = 8409645947                        # ← تأكد
 CHANNEL_ID = "@mar_netflix"                  # ← قناة الإشعارات
 TECH_USERNAME = "@BR_Go_16"                  # ← الفني (للتواصل)
 STORE_NAME = "MR NETFLIX"
